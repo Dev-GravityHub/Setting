@@ -1,10 +1,10 @@
 --[[
-	Dex++
-	Version 3.0
+	DexPlusPlus-V4
+	Version 4.1
 	
-	Developed by Chillz
+	Developed by realtboy
 	
-	Dex++ is a revival of Moon's Dex, made to fulfill Moon's Dex prophecy.
+	DexPlusPlus-V4 is a revival of Moon's Dex, made to fulfill Moon's Dex prophecy.
 ]]
 
 local selection
@@ -14266,13 +14266,13 @@ Main = (function()
 	Main.Elevated = false
 	Main.AllowDraggableOnMobile = true
 	Main.MissingEnv = {}
-	Main.Version = "3.0"
+	Main.Version = "4.1"
 	Main.Mouse = plr:GetMouse()
 	Main.AppControls = {}
 	Main.Apps = Apps
 	Main.MenuApps = {}
-	Main.GitName = "AZYsGithub"
-	Main.RepoName = "DexPlusPlus"
+	Main.GitName = "Dev-GravityHub"
+	Main.RepoName = "Dex++"
 	Main.GitRepoName = Main.GitName.."/"..Main.RepoName
 
 	Main.DisplayOrders = {
@@ -14630,91 +14630,69 @@ Main = (function()
 		end
 		
 		
-		-- DECOMPILERS
+        -- DECOMPILERS
 		
-		local AdvancedDecompilerCache
-		pcall(function()
-			AdvancedDecompilerCache = loadstring(game:HttpGet("https://raw.githubusercontent.com/"..Main.GitName.."/Advanced-Decompiler-V3/refs/heads/main/init.lua"))()
-		end)
+		local luaexpert_last_call = 0
 		
-		local konstant_last_call = 0
-		
-		local function KonstantDec(...)
-			-- by lovrewe
-			--warn("No built-in decompiler exists, using Konstant decompiler...")
-			--assert(getscriptbytecode, "Exploit not supported.")
-			local API = "http://api.plusgiant5.com"
+		local function LuaExpertDec(script_instance)
+			local success, bytecode = pcall(env.getscriptbytecode, script_instance)
 
-			local request = env.request
+			if (not success) then
+				return "-- Failed to get script bytecode, error:\n\n--[[\n" .. tostring(bytecode) .. "\n--]]"
+			end
 
-			local function call(konstantType, scriptPath)
-				local success, bytecode = pcall(env.getscriptbytecode, scriptPath)
+			local time_elapsed = os.clock() - luaexpert_last_call
+			if time_elapsed <= 0.6 then
+				task.wait(0.6 - time_elapsed)
+			end
 
-				if (not success) then
-					return `-- Failed to get script bytecode, error:\n\n--[[\n{bytecode}\n--]]`
+			local encoder = base64_encode or (crypt and crypt.base64encode) or (crypt and crypt.base64 and crypt.base64.encode)
+			if not encoder then
+				encoder = function(data)
+					local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+					return ((data:gsub('.', function(x)
+						local r,byte = '',x:byte()
+						for i=8,1,-1 do r = r .. (byte % 2^i - byte % 2^(i-1) > 0 and '1' or '0') end
+						return r
+					end)..'0000'):gsub('%d%d%d?%d?%d?%d?', function(x)
+						if #x < 6 then return '' end
+						local c = 0
+						for i=1,6 do c = c + (x:sub(i,i) == '1' and 2^(6-i) or 0) end
+						return b:sub(c+1,c+1)
+					end)..({ '', '==', '=' })[#data % 3 + 1])
 				end
+			end
 
-				local time_elapsed = os.clock() - konstant_last_call
-				if time_elapsed <= .5 then
-					task.wait(.5 - time_elapsed)
-				end
-
-				local httpResult = env.request({
-					Url = API .. konstantType,
-					Body = bytecode,
-					Method = "POST",
-					Headers = {
-						["Content-Type"] = "text/plain"
-					}
+			local HttpService = game:GetService("HttpService")
+			local req = env.request or (syn and syn.request) or (http and http.request) or http_request or request
+			
+			local httpResult = req({
+				Url = "https://api.lua.expert/decompile",
+				Method = "POST",
+				Headers = {
+					["Content-Type"] = "application/json"
+				},
+				Body = HttpService:JSONEncode({
+					script = encoder(bytecode)
 				})
+			})
 
-				konstant_last_call = os.clock()
+			luaexpert_last_call = os.clock()
 
-				if (httpResult.StatusCode ~= 200) then
-					return `-- Error occurred while requesting Konstant API, error:\n\n--[[\n{httpResult.Body}\n--]]`
-				else
-					return httpResult.Body
-				end
+			if (not httpResult or httpResult.StatusCode ~= 200) then
+				return "-- Error occurred while requesting lua.expert API, error:\n\n--[[\n" .. tostring(httpResult and httpResult.Body or "No response") .. "\n--]]"
+			else
+				return httpResult.Body
 			end
-
-			local function konstantDecompile(scriptPath)
-				return call("/konstant/decompile", scriptPath)
-			end
-
-			return konstantDecompile(...)
 		end
-		local ADDec = AdvancedDecompilerCache or function() return "Failed to load Advanced Decompiler" end
 
-		local function ShinyDec(script_instance)
-			if typeof(crypt) ~= "table" then return "-- 'crypt' library is missing!" end
-			local success, result = pcall(function()
-				return game:HttpGet("http://127.0.0.1:"..tostring(Settings.Decompiler.ShinyDecompilerPort))
-			end)
-			if not success then return "-- Shiny decompiler is not active or port is wrong!" end
-
-			local bytecode = getscriptbytecode(script_instance)
-			local encoded = crypt.base64encode(bytecode)
-			return env.request(
-				{
-					Url = "http://127.0.0.1:"..tostring(Settings.Decompiler.ShinyDecompilerPort).."/luau/decompile",
-					Method = "POST",
-					Body = encoded
-				}
-			).Body
-		end
+		-- Hook it directly into Dex
 		env.decompile = function(...)
-			if typeof(decompile) == "function" and Settings.Decompiler.PreferDecompilerFallback == false then
-				return decompile(...)
-			elseif typeof(getscriptbytecode) == "function" then
-				local fallbackMode = Settings.Decompiler.DecompilerFallback
-				
-				if fallbackMode == "Konstant" then
-					return KonstantDec(...)
-				elseif fallbackMode == "AdvancedDecompiler" then
-					return ADDec(...)
-				elseif  fallbackMode == "Shiny" then
-					return ShinyDec(...)
-				end
+			if typeof(getscriptbytecode) == "function" then
+				-- Forced to only use lua.expert API
+				return LuaExpertDec(...)
+			else
+			    return "-- getscriptbytecode is not supported by your executor. Cannot decompile."
 			end
 		end
 		
@@ -14743,8 +14721,7 @@ Main = (function()
 			t.TextColor3 = Color3.new(1,1,1)
 			t.TextWrapped = true
 			t.TextScaled = true
-			t.Text = "\n\n\n\n\n\n\n\nHello Skidsploit user,\nZinnia, Chillz and the Secret Service does not approve of Dex being used on your skidsploit.\nPlease consider getting something better.\n\nIncompatible Reason: "..reason.."\n\n\n\n\n\n\n\n"
-			
+            t.Text = "\n\n\n\n\n\n\n\nHello Skidsploit user, realtboy and the Secret Service do not approve of Dex being used on your skidsploit.\nPlease consider getting something better.\n\nIncompatible Reason: "..reason.."\n\n\n\n\n\n\n\n"			
 			-- This sound wont work!!!
 			local sound = Instance.new("Sound",msg)
 			sound.SoundId = "rbxassetid://175964948"
@@ -14771,7 +14748,7 @@ Main = (function()
 		if x[1] ~= t then incompatibleMessage("WRAPPER FAILED TO CYCLIC #2") end
 		
 		if game ~= workspace.Parent then
-			incompatibleMessage("WRAPPER NO CACHE (game ≠ workspace.Parent)", true)
+			incompatibleMessage("WRAPPER NO CACHE (game â‰  workspace.Parent)", true)
 			game = workspace.Parent
 		end
 		
@@ -15186,7 +15163,7 @@ Main = (function()
 			{8,"Frame",{BackgroundColor3=Color3.new(0.20392157137394,0.20392157137394,0.20392157137394),BorderSizePixel=0,Name="ProgressBar",Parent={3},Position=UDim2.new(0,110,0,145),Size=UDim2.new(0,0,0,4),}},
 			{9,"Frame",{BackgroundColor3=Color3.new(0.2392156869173,0.56078433990479,0.86274510622025),BorderSizePixel=0,Name="Bar",Parent={8},Size=UDim2.new(0,0,1,0),}},
 			{10,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Image="rbxassetid://2764171053",ImageColor3=Color3.new(0.17647059261799,0.17647059261799,0.17647059261799),Parent={8},ScaleType=1,Size=UDim2.new(1,0,1,0),SliceCenter=Rect.new(2,2,254,254),}},
-			{11,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="Creator",Parent={2},Position=UDim2.new(1,-110,1,-20),Size=UDim2.new(0,105,0,20),Text="Developed by Chillz.",TextColor3=Color3.new(1,1,1),TextSize=14,TextXAlignment=1,}},
+			{11,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="Creator",Parent={2},Position=UDim2.new(1,-110,1,-20),Size=UDim2.new(0,105,0,20),Text="Developed by realtboy.",TextColor3=Color3.new(1,1,1),TextSize=14,TextXAlignment=1,}},
 			{12,"UIGradient",{Parent={11},Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(1,1,0),}),}},
 			{13,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="Version",Parent={2},Position=UDim2.new(1,-110,1,-35),Size=UDim2.new(0,105,0,20),Text=Main.Version,TextColor3=Color3.new(1,1,1),TextSize=14,TextXAlignment=1,}},
 			{14,"UIGradient",{Parent={13},Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(1,1,0),}),}},
